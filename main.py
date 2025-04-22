@@ -1,9 +1,11 @@
+from enum import Enum
 import time
 import subprocess as sp
 import shlex
 from icecream import ic
 import logging
 import textwrap
+from dataclasses import dataclass
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,12 +29,12 @@ def read_message(process):
         if line_cnt > MAX_LINES:
             raise IOError("Too many lines")
     msg = msg.strip("\nok")
-    logging.info("message from %d:\n%s", process.pid, textwrap.indent(msg, "    "))
+    logging.debug("message from %d:\n%s", process.pid, textwrap.indent(msg, "    "))
     return msg
 
 
 def send_message(msg, process):
-    logging.info("message to %d:\n%s", process.pid, textwrap.indent(msg, "    "))
+    logging.debug("message to %d:\n%s", process.pid, textwrap.indent(msg, "    "))
     process.stdin.write(msg + "\n")
     process.stdin.flush()
 
@@ -61,6 +63,19 @@ def create_player(image_name="mzinga"):
     return child
 
 
+class Outcome(Enum):
+    WHITE_WINS = "WhiteWins"
+    BLACK_WINS = "BlackWins"
+    DRAW = "Draw"
+
+
+@dataclass
+class GameOucome(object):
+    outcome: Outcome
+    reason: str
+    game_string: str
+
+
 def play_game():
     referee = create_referee()
     white = create_player()
@@ -81,7 +96,7 @@ def play_game():
     # The string describing the status of the board
     game_string = ""
 
-    for ply in range(2*MAX_PLIES):
+    for ply in range(2 * MAX_PLIES):
         is_white = ply % 2 == 0
         logging.info("ply: %d is_white: %d", ply, is_white)
         if is_white:
@@ -98,35 +113,33 @@ def play_game():
         send_message(f"play {move}", referee)
         ans = read_message(referee)
         if ans.startswith("invalidmove"):
-            # FIXME: handle the error by giving the victory to the other player
-            break
+            if is_white:
+                return GameOucome(Outcome.BLACK_WINS, reason="white proposed invalid move", game_string=game_string)
+            else:
+                return GameOucome(Outcome.WHITE_WINS, reason="black proposed invalid move", game_string=game_string)
         else:
             game_string = ans
             logging.info("game string:\n%s", textwrap.indent(game_string, "    "))
 
         game_state = game_string.split(";")[1]
-        if game_state == "Draw":
-            logging.info("The game ended with a draw!")
-            # TODO: report the result
-            break
-        elif game_state == "WhiteWins":
-            logging.info("The white player wins")
-            # TODO: report the result
-            break
-        elif game_state == "BlackWins":
-            logging.info("The black player wins")
-            # TODO: report the resul
-            break
+        if game_state in ["Draw", "WhiteWins", "BlackWins"]:
+            outcome = Outcome(game_state)
+            logging.info("The game ended: %s", outcome)
+            return GameOucome(outcome, reason="normal ending", game_string=game_string)
 
         # Apply the moves
-        for player in [current, other]:
+        for i, player in enumerate([white, black]):
             send_message(f"play {move}", player)
             ans = read_message(player)
             if ans.startswith("invalidmove"):
-                # FIXME: handle the error by making the corresponding player lose
-                break
-            
+                if i == 0:
+                    return GameOucome(Outcome.BLACK_WINS, reason="unrecognized valid move by white", game_string=game_string)
+                else:
+                    return GameOucome(Outcome.WHITE_WINS, reason="unrecognized valid move by black", game_string=game_string)
+
+    return GameOucome(Outcome.DRAW, reason="maxed out plies", game_string=game_string)
 
 
 if __name__ == "__main__":
-    play_game()
+    result = play_game()
+    print(result)
