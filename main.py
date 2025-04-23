@@ -85,8 +85,8 @@ class GameOucome(object):
 
 def play_game():
     referee = create_referee()
-    white = create_player()
-    black = create_player()
+    white = create_player("mzinga")
+    black = create_player("nokamute")
 
     # Get the greetings
     for sub in [referee, white, black]:
