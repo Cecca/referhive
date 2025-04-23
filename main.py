@@ -6,28 +6,35 @@ from icecream import ic
 import logging
 import textwrap
 from dataclasses import dataclass
+import os
 
 logging.basicConfig(level=logging.INFO)
 
 
 GAME_TYPE = "Base+MLP"
-MOVE_TIMEOUT_S = 1
+MOVE_TIMEOUT_S = 5
 MAX_PLIES = 100
 
 
-def read_message(process):
+def read_message(process, timeout=None):
     MAX_LINES = 100
+    os.set_blocking(process.stdout.fileno(), False)
     msg = ""
     line = ""
     line_cnt = 0
+    start = time.time()
     while line != "ok":
+        if timeout is not None and time.time() - start > timeout:
+            raise TimeoutError("Timeout exceeded")
         line = process.stdout.readline().strip()
-        if line.startswith("err"):
-            raise ValueError(f"protocol error: {msg}")
-        msg += line + "\n"
-        line_cnt += 1
-        if line_cnt > MAX_LINES:
-            raise IOError("Too many lines")
+        if line:
+            if line.startswith("err"):
+                raise ValueError(f"protocol error: {msg}")
+            msg += line + "\n"
+            line_cnt += 1
+            if line_cnt > MAX_LINES:
+                raise IOError("Too many lines")
+        time.sleep(0.1)
     msg = msg.strip("\nok")
     logging.debug("message from %d:\n%s", process.pid, textwrap.indent(msg, "    "))
     return msg
@@ -101,22 +108,35 @@ def play_game():
         logging.info("ply: %d is_white: %d", ply, is_white)
         if is_white:
             current = white
-            other = black
         else:
             current = black
-            other = white
 
-        # FIXME: enforce the timeout
         send_message(f"bestmove time 00:00:{MOVE_TIMEOUT_S:02}", current)
-        move = read_message(current)
+        # Enforce the timeout, while allowing an additional grace period
+        try:
+            move = read_message(current, timeout=MOVE_TIMEOUT_S + 1)
+        except:
+            return GameOucome(
+                Outcome.BLACK_WINS if is_white else Outcome.WHITE_WINS,
+                reason="timeout while recommending best move",
+                game_string=game_string
+            )
         # check that the move is valid by first applying it to the referee
         send_message(f"play {move}", referee)
         ans = read_message(referee)
         if ans.startswith("invalidmove"):
             if is_white:
-                return GameOucome(Outcome.BLACK_WINS, reason="white proposed invalid move", game_string=game_string)
+                return GameOucome(
+                    Outcome.BLACK_WINS,
+                    reason="white proposed invalid move",
+                    game_string=game_string,
+                )
             else:
-                return GameOucome(Outcome.WHITE_WINS, reason="black proposed invalid move", game_string=game_string)
+                return GameOucome(
+                    Outcome.WHITE_WINS,
+                    reason="black proposed invalid move",
+                    game_string=game_string,
+                )
         else:
             game_string = ans
             logging.info("game string:\n%s", textwrap.indent(game_string, "    "))
@@ -133,9 +153,17 @@ def play_game():
             ans = read_message(player)
             if ans.startswith("invalidmove"):
                 if i == 0:
-                    return GameOucome(Outcome.BLACK_WINS, reason="unrecognized valid move by white", game_string=game_string)
+                    return GameOucome(
+                        Outcome.BLACK_WINS,
+                        reason="unrecognized valid move by white",
+                        game_string=game_string,
+                    )
                 else:
-                    return GameOucome(Outcome.WHITE_WINS, reason="unrecognized valid move by black", game_string=game_string)
+                    return GameOucome(
+                        Outcome.WHITE_WINS,
+                        reason="unrecognized valid move by black",
+                        game_string=game_string,
+                    )
 
     return GameOucome(Outcome.DRAW, reason="maxed out plies", game_string=game_string)
 
