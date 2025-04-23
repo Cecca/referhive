@@ -1,3 +1,4 @@
+import datetime
 from enum import Enum
 import time
 import subprocess as sp
@@ -186,6 +187,62 @@ def play_game(white_image, black_image):
     )
 
 
+def get_db():
+    db = sqlite3.connect("games.db")
+    db.executescript("""
+    CREATE TABLE IF NOT EXISTS games (
+        date           text,
+        white          text,
+        black          text,
+        outcome        text,
+        outcome_reason text,
+        game_string    text,
+        elapsed_s      real
+    );
+    """)
+    return db
+
+
+def play_tournament(match_list):
+    for white, black in match_list:
+        date = datetime.datetime.now().isoformat()
+        logging.info("playing game between %s (white) and %s (black)", white, black)
+        result = play_game(white, black)
+        with get_db() as db:
+            db.execute(
+                """INSERT INTO games
+                   (date, white, black, outcome, outcome_reason, game_string, elapsed)
+                   VALUES
+                   (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    date,
+                    white,
+                    black,
+                    str(result.outcome),
+                    result.reason,
+                    result.game_string,
+                    result.elapsed_s,
+                ],
+            )
+
+
+def load_tournament(path):
+    match_list = []
+    with open(path) as fp:
+        for line in fp.readlines():
+            if line.startswith("#") or len(line.strip()) == 0:
+                continue
+            tokens = tuple(t.strip() for t in line.split(","))
+            ic(tokens)
+            assert len(tokens) == 2
+            match_list.append(tokens)
+
+    return match_list
+
+
 if __name__ == "__main__":
-    result = play_game("mzinga", "mzinga-cpp")
-    print(result)
+    match_list = load_tournament("tournament.txt")
+    play_tournament(match_list)
+    # result = play_game("mzinga", "mzinga-cpp")
+    # print(result)
