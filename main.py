@@ -91,6 +91,11 @@ def play_game(white_image, black_image):
     white = create_player(white_image)
     black = create_player(black_image)
 
+    def killall():
+        referee.kill()
+        white.kill()
+        black.kill()
+
     # Get the greetings
     for sub in [referee, white, black]:
         msg = read_message(sub)
@@ -120,6 +125,7 @@ def play_game(white_image, black_image):
         try:
             move = read_message(current, timeout=MOVE_TIMEOUT_S + 1)
         except:
+            killall()
             return GameOucome(
                 Outcome.BLACK_WINS if is_white else Outcome.WHITE_WINS,
                 reason="timeout while recommending best move",
@@ -131,6 +137,7 @@ def play_game(white_image, black_image):
         ans = read_message(referee)
         if ans.startswith("invalidmove"):
             if is_white:
+                killall()
                 return GameOucome(
                     Outcome.BLACK_WINS,
                     reason="white proposed invalid move",
@@ -138,6 +145,7 @@ def play_game(white_image, black_image):
                     elapsed_s=time.time() - start_time,
                 )
             else:
+                killall()
                 return GameOucome(
                     Outcome.WHITE_WINS,
                     reason="black proposed invalid move",
@@ -152,6 +160,7 @@ def play_game(white_image, black_image):
         if game_state in ["Draw", "WhiteWins", "BlackWins"]:
             outcome = Outcome(game_state)
             logging.info("The game ended: %s", outcome)
+            killall()
             return GameOucome(
                 outcome,
                 reason="normal ending",
@@ -165,6 +174,7 @@ def play_game(white_image, black_image):
             ans = read_message(player)
             if ans.startswith("invalidmove"):
                 if i == 0:
+                    killall()
                     return GameOucome(
                         Outcome.BLACK_WINS,
                         reason="unrecognized valid move by white",
@@ -172,6 +182,7 @@ def play_game(white_image, black_image):
                         elapsed_s=time.time() - start_time,
                     )
                 else:
+                    killall()
                     return GameOucome(
                         Outcome.WHITE_WINS,
                         reason="unrecognized valid move by black",
@@ -179,6 +190,7 @@ def play_game(white_image, black_image):
                         elapsed_s=time.time() - start_time,
                     )
 
+    killall()
     return GameOucome(
         Outcome.DRAW,
         reason="maxed out plies",
@@ -191,7 +203,7 @@ def get_db():
     db = sqlite3.connect("games.db")
     db.executescript("""
     CREATE TABLE IF NOT EXISTS games (
-        date           text,
+        timestamp      text,
         white          text,
         black          text,
         outcome        text,
@@ -211,7 +223,7 @@ def play_tournament(match_list):
         with get_db() as db:
             db.execute(
                 """INSERT INTO games
-                   (date, white, black, outcome, outcome_reason, game_string, elapsed)
+                   (timestamp, white, black, outcome, outcome_reason, game_string, elapsed_s)
                    VALUES
                    (?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -219,7 +231,7 @@ def play_tournament(match_list):
                     date,
                     white,
                     black,
-                    str(result.outcome),
+                    result.outcome.value,
                     result.reason,
                     result.game_string,
                     result.elapsed_s,
@@ -234,7 +246,6 @@ def load_tournament(path):
             if line.startswith("#") or len(line.strip()) == 0:
                 continue
             tokens = tuple(t.strip() for t in line.split(","))
-            ic(tokens)
             assert len(tokens) == 2
             match_list.append(tokens)
 
@@ -244,5 +255,3 @@ def load_tournament(path):
 if __name__ == "__main__":
     match_list = load_tournament("tournament.txt")
     play_tournament(match_list)
-    # result = play_game("mzinga", "mzinga-cpp")
-    # print(result)
