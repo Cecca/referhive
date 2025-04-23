@@ -7,6 +7,7 @@ import logging
 import textwrap
 from dataclasses import dataclass
 import os
+import sqlite3
 
 logging.basicConfig(level=logging.INFO)
 
@@ -81,12 +82,13 @@ class GameOucome(object):
     outcome: Outcome
     reason: str
     game_string: str
+    elapsed_s: float
 
 
-def play_game():
+def play_game(white_image, black_image):
     referee = create_referee()
-    white = create_player("mzinga")
-    black = create_player("nokamute")
+    white = create_player(white_image)
+    black = create_player(black_image)
 
     # Get the greetings
     for sub in [referee, white, black]:
@@ -102,6 +104,7 @@ def play_game():
 
     # The string describing the status of the board
     game_string = ""
+    start_time = time.time()
 
     for ply in range(2 * MAX_PLIES):
         is_white = ply % 2 == 0
@@ -119,7 +122,8 @@ def play_game():
             return GameOucome(
                 Outcome.BLACK_WINS if is_white else Outcome.WHITE_WINS,
                 reason="timeout while recommending best move",
-                game_string=game_string
+                game_string=game_string,
+                elapsed_s=time.time() - start_time,
             )
         # check that the move is valid by first applying it to the referee
         send_message(f"play {move}", referee)
@@ -130,12 +134,14 @@ def play_game():
                     Outcome.BLACK_WINS,
                     reason="white proposed invalid move",
                     game_string=game_string,
+                    elapsed_s=time.time() - start_time,
                 )
             else:
                 return GameOucome(
                     Outcome.WHITE_WINS,
                     reason="black proposed invalid move",
                     game_string=game_string,
+                    elapsed_s=time.time() - start_time,
                 )
         else:
             game_string = ans
@@ -145,7 +151,12 @@ def play_game():
         if game_state in ["Draw", "WhiteWins", "BlackWins"]:
             outcome = Outcome(game_state)
             logging.info("The game ended: %s", outcome)
-            return GameOucome(outcome, reason="normal ending", game_string=game_string)
+            return GameOucome(
+                outcome,
+                reason="normal ending",
+                game_string=game_string,
+                elapsed_s=time.time() - start_time,
+            )
 
         # Apply the moves
         for i, player in enumerate([white, black]):
@@ -157,17 +168,24 @@ def play_game():
                         Outcome.BLACK_WINS,
                         reason="unrecognized valid move by white",
                         game_string=game_string,
+                        elapsed_s=time.time() - start_time,
                     )
                 else:
                     return GameOucome(
                         Outcome.WHITE_WINS,
                         reason="unrecognized valid move by black",
                         game_string=game_string,
+                        elapsed_s=time.time() - start_time,
                     )
 
-    return GameOucome(Outcome.DRAW, reason="maxed out plies", game_string=game_string)
+    return GameOucome(
+        Outcome.DRAW,
+        reason="maxed out plies",
+        game_string=game_string,
+        elapsed_s=time.time() - start_time,
+    )
 
 
 if __name__ == "__main__":
-    result = play_game()
+    result = play_game("mzinga", "mzinga-cpp")
     print(result)
