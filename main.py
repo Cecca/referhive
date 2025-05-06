@@ -3,7 +3,6 @@ from enum import Enum
 import time
 import subprocess as sp
 import shlex
-from icecream import ic
 import logging
 import textwrap
 from dataclasses import dataclass
