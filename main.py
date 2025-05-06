@@ -9,6 +9,7 @@ import textwrap
 from dataclasses import dataclass
 import os
 import sqlite3
+import argparse
 
 logging.basicConfig(level=logging.INFO)
 
@@ -51,7 +52,9 @@ def send_message(msg, process):
 def start_container(name, image_name="mzinga", gpu_id=None):
     gpu_string = f"--gpus {gpu_id}" if gpu_id is not None else ""
     child = sp.Popen(
-        shlex.split(f"docker run --name {name} -i --rm {gpu_string} -w /app {image_name}"),
+        shlex.split(
+            f"docker run --name {name} -i --rm {gpu_string} -w /app {image_name}"
+        ),
         stdin=sp.PIPE,
         stdout=sp.PIPE,
         stderr=sp.PIPE,
@@ -202,11 +205,17 @@ def get_db():
     return db
 
 
-def play_tournament(match_list):
+def play_tournament(match_list, white_gpu, black_gpu):
     for white, black in match_list:
         date = datetime.datetime.now().isoformat()
-        logging.info("playing game between %s (white) and %s (black)", white, black)
-        result = play_game(white, black)
+        logging.info(
+            "playing game between %s (white) (gpu %s) and %s (black) (gpu %s)",
+            white,
+            white_gpu,
+            black,
+            black_gpu,
+        )
+        result = play_game(white, black, white_gpu=white_gpu, black_gpu=black_gpu)
         with get_db() as db:
             db.execute(
                 """INSERT INTO games
@@ -240,5 +249,12 @@ def load_tournament(path):
 
 
 if __name__ == "__main__":
-    match_list = load_tournament("tournament.txt")
-    play_tournament(match_list)
+    parser = argparse.ArgumentParser("referhive")
+    parser.add_argument("--games", default="tournament.txt")
+    parser.add_argument("--white-gpu")
+    parser.add_argument("--black-gpu")
+
+    args = parser.parse_args()
+
+    match_list = load_tournament(args.games)
+    play_tournament(match_list, args.white_gpu, args.black_gpu)
