@@ -48,27 +48,16 @@ def send_message(msg, process):
     process.stdin.flush()
 
 
-def create_referee(image_name="mzinga"):
+def start_container(name, image_name="mzinga", gpu_id=None):
+    gpu_string = f"--gpus {gpu_id}" if gpu_id is not None else ""
     child = sp.Popen(
-        shlex.split(f"docker run -i --rm -w /app {image_name}"),
+        shlex.split(f"docker run --name {name} -i --rm {gpu_string} -w /app {image_name}"),
         stdin=sp.PIPE,
         stdout=sp.PIPE,
         stderr=sp.PIPE,
         text=True,
     )
-    logging.info("start referee, PID %d", child.pid)
-    return child
-
-
-def create_player(image_name="mzinga"):
-    child = sp.Popen(
-        shlex.split(f"docker run -i --rm -w /app {image_name}"),
-        stdin=sp.PIPE,
-        stdout=sp.PIPE,
-        stderr=sp.PIPE,
-        text=True,
-    )
-    logging.info("start player, PID %d", child.pid)
+    logging.info("start %s, PID %d", name, child.pid)
     return child
 
 
@@ -176,10 +165,10 @@ def do_play_game(referee, white, black):
     )
 
 
-def play_game(white_image, black_image):
-    referee = create_referee()
-    white = create_player(white_image)
-    black = create_player(black_image)
+def play_game(white_image, black_image, white_gpu=None, black_gpu=None):
+    referee = start_container("referee")
+    white = start_container("white", white_image, gpu_id=white_gpu)
+    black = start_container("black", black_image, gpu_id=black_gpu)
 
     # Get the greetings
     for sub in [referee, white, black]:
