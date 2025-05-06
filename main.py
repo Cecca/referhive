@@ -86,23 +86,7 @@ class GameOucome(object):
     elapsed_s: float
 
 
-def play_game(white_image, black_image):
-    referee = create_referee()
-    white = create_player(white_image)
-    black = create_player(black_image)
-
-    def killall():
-        referee.kill()
-        white.kill()
-        black.kill()
-
-    # Get the greetings
-    for sub in [referee, white, black]:
-        msg = read_message(sub)
-        # Check the they export all the extensions
-        # FIXME: handle errors gracefully
-        assert msg.split("\n")[1].strip() == "Mosquito;Ladybug;Pillbug"
-
+def do_play_game(referee, white, black):
     # Start the game for each engine
     for sub in [referee, white, black]:
         send_message(f"newgame {GAME_TYPE}", sub)
@@ -125,7 +109,6 @@ def play_game(white_image, black_image):
         try:
             move = read_message(current, timeout=MOVE_TIMEOUT_S + 1)
         except:
-            killall()
             return GameOucome(
                 Outcome.BLACK_WINS if is_white else Outcome.WHITE_WINS,
                 reason="timeout while recommending best move",
@@ -137,7 +120,6 @@ def play_game(white_image, black_image):
         ans = read_message(referee)
         if ans.startswith("invalidmove"):
             if is_white:
-                killall()
                 return GameOucome(
                     Outcome.BLACK_WINS,
                     reason="white proposed invalid move",
@@ -145,7 +127,6 @@ def play_game(white_image, black_image):
                     elapsed_s=time.time() - start_time,
                 )
             else:
-                killall()
                 return GameOucome(
                     Outcome.WHITE_WINS,
                     reason="black proposed invalid move",
@@ -160,7 +141,6 @@ def play_game(white_image, black_image):
         if game_state in ["Draw", "WhiteWins", "BlackWins"]:
             outcome = Outcome(game_state)
             logging.info("The game ended: %s", outcome)
-            killall()
             return GameOucome(
                 outcome,
                 reason="normal ending",
@@ -174,7 +154,6 @@ def play_game(white_image, black_image):
             ans = read_message(player)
             if ans.startswith("invalidmove"):
                 if i == 0:
-                    killall()
                     return GameOucome(
                         Outcome.BLACK_WINS,
                         reason="unrecognized valid move by white",
@@ -182,7 +161,6 @@ def play_game(white_image, black_image):
                         elapsed_s=time.time() - start_time,
                     )
                 else:
-                    killall()
                     return GameOucome(
                         Outcome.WHITE_WINS,
                         reason="unrecognized valid move by black",
@@ -190,13 +168,33 @@ def play_game(white_image, black_image):
                         elapsed_s=time.time() - start_time,
                     )
 
-    killall()
     return GameOucome(
         Outcome.DRAW,
         reason="maxed out plies",
         game_string=game_string,
         elapsed_s=time.time() - start_time,
     )
+
+
+def play_game(white_image, black_image):
+    referee = create_referee()
+    white = create_player(white_image)
+    black = create_player(black_image)
+
+    # Get the greetings
+    for sub in [referee, white, black]:
+        msg = read_message(sub)
+        # Check the they export all the extensions
+        # FIXME: handle errors gracefully
+        assert msg.split("\n")[1].strip() == "Mosquito;Ladybug;Pillbug"
+
+    outcome = do_play_game(referee, white, black)
+
+    referee.kill()
+    white.kill()
+    black.kill()
+
+    return outcome
 
 
 def get_db():

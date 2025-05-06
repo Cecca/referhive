@@ -1,7 +1,7 @@
-mzinga,mzinga-cpp
+#mzinga,mzinga-cpp
 #mzinga-cpp,mzinga
-nokamute,mzinga
-#mzinga,nokamute
+#nokamute,mzinga
+mzinga,nokamute
 #mzinga-cpp,nokamute
 #nokamute,mzinga-cpp
 
