@@ -59,6 +59,9 @@ def start_container(name, image_name="mzinga", gpu_id=None):
         stderr=sp.PIPE,
         text=True,
     )
+    # wait for the container to start, and if it fails, abort
+    time.sleep(5)
+    assert child.poll() is None
     logging.info("start %s, PID %d", name, child.pid)
     return child
 
