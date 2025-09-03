@@ -148,7 +148,25 @@ def do_play_game(referee, white, black):
         # Apply the moves
         for i, player in enumerate([white, black]):
             send_message(f"play {move}", player)
-            ans = read_message(player)
+            try:
+                ans = read_message(player)
+            except ValueError as e:
+                # Se un giocatore genera un errore di protocollo nel processare una mossa valida...
+                # ... perde la partita.
+                if i == 0: # Era il bot bianco
+                    return GameOucome(
+                        Outcome.BLACK_WINS,
+                        reason=f"white failed to process valid move `{move}` with error: {e}",
+                        game_string=game_string,
+                        elapsed_s=time.time() - start_time,
+                    )
+                else: # Era il bot nero
+                    return GameOucome(
+                        Outcome.WHITE_WINS,
+                        reason=f"black failed to process valid move `{move}` with error: {e}",
+                        game_string=game_string,
+                        elapsed_s=time.time() - start_time,
+                    )
             if ans.startswith("invalidmove"):
                 if i == 0:
                     return GameOucome(
